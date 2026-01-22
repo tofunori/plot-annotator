@@ -679,8 +679,40 @@
         }
 
         // Image loading
-        function loadImage() {
-            document.getElementById('file-input').click();
+        // Store last directory handle for File System Access API
+        let lastDirectoryHandle = null;
+
+        async function loadImage() {
+            // Try modern File System Access API (remembers last folder)
+            if (window.showOpenFilePicker) {
+                try {
+                    const options = {
+                        types: [{
+                            description: 'Images',
+                            accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'] }
+                        }],
+                        multiple: false
+                    };
+                    // Use last directory if available
+                    if (lastDirectoryHandle) {
+                        options.startIn = lastDirectoryHandle;
+                    }
+                    const [fileHandle] = await window.showOpenFilePicker(options);
+                    // Save directory for next time
+                    lastDirectoryHandle = await fileHandle.getFile().then(f => fileHandle);
+                    const file = await fileHandle.getFile();
+                    loadImageFile(file);
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.warn('File picker error:', err);
+                        // Fallback to classic input
+                        document.getElementById('file-input').click();
+                    }
+                }
+            } else {
+                // Fallback for browsers without File System Access API
+                document.getElementById('file-input').click();
+            }
         }
 
         function handleFileSelect(event) {
@@ -859,6 +891,10 @@ Le serveur doit tourner sur http://localhost:8888`;
                     if (obj !== backgroundImage) canvas.remove(obj);
                 });
                 canvas.renderAll();
+                // Reset group counter
+                currentGroupId = 1;
+                lastColorUsed = null;
+                updateGroupIndicator();
             }
         }
 
