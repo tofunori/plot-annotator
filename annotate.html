@@ -445,8 +445,11 @@
                 });
             });
 
-            // Try to load current.png on startup
-            tryLoadCurrentPlot();
+            // Auto-load only if ?load=true in URL (set by /plot load command)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('load') === 'true') {
+                tryLoadCurrentPlot();
+            }
         }
 
         // Tool functions
