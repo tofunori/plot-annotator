@@ -161,6 +161,14 @@
 <body>
     <div class="toolbar">
         <div class="toolbar-group">
+            <label>Serveur</label>
+            <span id="server-status" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #333;">
+                <span id="status-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #666;"></span>
+                <span id="status-text">...</span>
+            </span>
+            <button onclick="checkServerStatus()" title="Vérifier la connexion">🔌 Test</button>
+        </div>
+        <div class="toolbar-group">
             <label>Fichier</label>
             <button onclick="loadImage()">📂 Ouvrir</button>
             <button onclick="loadCurrentPlot()">🔄 current.png</button>
@@ -691,6 +699,56 @@
             })
             .catch(err => console.warn('Script search failed:', err));
         }
+
+        function checkServerStatus() {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+
+            dot.style.background = '#FFA500'; // Orange = checking
+            text.textContent = 'Test...';
+
+            fetch('/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ zones: [], test: true, created: new Date().toISOString(), plot_name: 'test' })
+            })
+            .then(res => {
+                if (res.ok) {
+                    dot.style.background = '#4CAF50'; // Green = connected
+                    text.textContent = 'Connecté';
+                    setTimeout(() => {
+                        text.textContent = '✓ OK';
+                    }, 2000);
+                } else {
+                    throw new Error('Server error');
+                }
+            })
+            .catch(err => {
+                dot.style.background = '#F44336'; // Red = disconnected
+                text.textContent = 'Déconnecté';
+                showServerHelp();
+            });
+        }
+
+        function showServerHelp() {
+            const help = `⚠️ Serveur non connecté!
+
+Pour démarrer le serveur:
+
+1. Ouvrir un terminal
+2. Exécuter:
+   python3 ~/.claude/tools/annotate_server.py
+
+3. Ou via Claude/Codex:
+   "démarre le serveur d'annotation"
+
+Le serveur doit tourner sur http://localhost:8888`;
+
+            alert(help);
+        }
+
+        // Check server status on page load
+        setTimeout(checkServerStatus, 1000);
 
         function loadCurrentPlot() {
             // Try to load from file system via fetch (works if served locally)
