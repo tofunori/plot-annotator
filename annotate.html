@@ -191,9 +191,13 @@
             <span id="stroke-value">3</span>
         </div>
         <div class="toolbar-group">
+            <button onclick="newGroup()">➕ Nouveau groupe</button>
             <button onclick="deleteSelected()">🗑️ Supprimer</button>
             <button onclick="clearAll()">❌ Tout effacer</button>
             <button onclick="toggleLabels()">🏷️ Labels</button>
+        </div>
+        <div class="toolbar-group">
+            <span id="group-indicator" style="color: #4ecca3; font-size: 12px;">Groupe: 1</span>
         </div>
     </div>
 
@@ -213,6 +217,24 @@
         <div>
             <span class="zoom-info">Zoom: <span id="zoom-level">100</span>%</span>
             <span style="margin-left: 20px;">Molette = Zoom | Espace+drag / Clic-droit = Pan</span>
+        </div>
+    </div>
+
+    <!-- Text Input Modal -->
+    <div class="modal" id="text-modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2>📝 Ajouter du texte</h2>
+            <input type="text" id="text-input" placeholder="Entrez votre annotation..."
+                   style="width: 100%; padding: 12px; font-size: 16px; background: #0f3460;
+                          border: 2px solid #4ecca3; border-radius: 8px; color: #eee;
+                          margin-bottom: 15px; outline: none;">
+            <p style="font-size: 12px; color: #888; margin-bottom: 15px;">
+                Groupe actuel: <span id="modal-group-id" style="color: #4ecca3;">1</span>
+            </p>
+            <div class="modal-buttons">
+                <button onclick="cancelText()">Annuler</button>
+                <button class="primary" onclick="confirmText()">✓ Ajouter</button>
+            </div>
         </div>
     </div>
 
@@ -288,6 +310,8 @@
         let isPanning = false;
         let lastPanPoint = null;
         let spacePressed = false;
+        let currentGroupId = 1;
+        let lastColorUsed = null;
 
         // Initialize
         function init() {
@@ -355,6 +379,11 @@
                 }
             });
 
+            // Add groupId to freedraw paths
+            canvas.on('path:created', function(e) {
+                e.path.groupId = currentGroupId;
+            });
+
             // Prevent context menu on middle click
             canvas.upperCanvasEl.addEventListener('contextmenu', e => e.preventDefault());
             canvas.upperCanvasEl.addEventListener('mousedown', e => {
@@ -371,6 +400,20 @@
 
             // Keyboard shortcuts
             document.addEventListener('keydown', e => {
+                // Check if text modal is open
+                const textModalOpen = document.getElementById('text-modal').classList.contains('show');
+
+                if (textModalOpen) {
+                    if (e.key === 'Enter') {
+                        confirmText();
+                        e.preventDefault();
+                    } else if (e.key === 'Escape') {
+                        cancelText();
+                        e.preventDefault();
+                    }
+                    return;
+                }
+
                 if (e.key === ' ' || e.code === 'Space') {
                     if (!spacePressed) {
                         spacePressed = true;
@@ -464,14 +507,15 @@
             };
 
             if (currentTool === 'rect') {
-                tempShape = new fabric.Rect({ ...options, width: 0, height: 0 });
+                tempShape = new fabric.Rect({ ...options, width: 0, height: 0, groupId: currentGroupId });
             } else if (currentTool === 'circle') {
-                tempShape = new fabric.Circle({ ...options, radius: 0 });
+                tempShape = new fabric.Circle({ ...options, radius: 0, groupId: currentGroupId });
             } else if (currentTool === 'line') {
                 tempShape = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
                     stroke: currentColor,
                     strokeWidth: strokeWidth,
-                    selectable: true
+                    selectable: true,
+                    groupId: currentGroupId
                 });
             }
 
@@ -517,22 +561,51 @@
             startPoint = null;
         }
 
+        let pendingTextPosition = null;
+
         function addText(opt) {
-            const pointer = canvas.getPointer(opt.e);
-            const text = prompt('Entrez le texte:');
-            if (text) {
+            pendingTextPosition = canvas.getPointer(opt.e);
+            document.getElementById('text-input').value = '';
+            document.getElementById('modal-group-id').textContent = currentGroupId;
+            document.getElementById('text-modal').classList.add('show');
+            setTimeout(() => document.getElementById('text-input').focus(), 100);
+        }
+
+        function confirmText() {
+            const text = document.getElementById('text-input').value.trim();
+            if (text && pendingTextPosition) {
                 const textObj = new fabric.IText(text, {
-                    left: pointer.x,
-                    top: pointer.y,
+                    left: pendingTextPosition.x,
+                    top: pendingTextPosition.y,
                     fill: currentColor,
                     fontSize: 16 + strokeWidth * 2,
                     fontFamily: 'Arial',
-                    selectable: true
+                    selectable: true,
+                    groupId: currentGroupId
                 });
                 canvas.add(textObj);
                 canvas.setActiveObject(textObj);
                 canvas.renderAll();
             }
+            closeTextModal();
+        }
+
+        function cancelText() {
+            closeTextModal();
+        }
+
+        function closeTextModal() {
+            document.getElementById('text-modal').classList.remove('show');
+            pendingTextPosition = null;
+        }
+
+        function newGroup() {
+            currentGroupId++;
+            updateGroupIndicator();
+        }
+
+        function updateGroupIndicator() {
+            document.getElementById('group-indicator').textContent = 'Groupe: ' + currentGroupId;
         }
 
         // Image loading
@@ -668,7 +741,8 @@
                 const zone = {
                     id: colorName,
                     color: color,
-                    type: obj.type
+                    type: obj.type,
+                    group_id: obj.groupId || 1
                 };
 
                 // Convert to image coordinates
