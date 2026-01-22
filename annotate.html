@@ -394,6 +394,10 @@
                 e.path.groupId = currentGroupId;
             });
 
+            // Update text size slider when text is selected
+            canvas.on('selection:created', onObjectSelected);
+            canvas.on('selection:updated', onObjectSelected);
+
             // Prevent context menu on middle click
             canvas.upperCanvasEl.addEventListener('contextmenu', e => e.preventDefault());
             canvas.upperCanvasEl.addEventListener('mousedown', e => {
@@ -504,6 +508,33 @@
         function updateTextSize() {
             textSize = parseInt(document.getElementById('text-size').value);
             document.getElementById('text-size-value').textContent = textSize;
+
+            // Update selected text objects
+            const activeObject = canvas.getActiveObject();
+            if (activeObject) {
+                if (activeObject.type === 'i-text' || activeObject.type === 'text') {
+                    activeObject.set('fontSize', textSize);
+                    canvas.renderAll();
+                } else if (activeObject.type === 'activeSelection') {
+                    // Multiple selection
+                    activeObject.forEachObject(obj => {
+                        if (obj.type === 'i-text' || obj.type === 'text') {
+                            obj.set('fontSize', textSize);
+                        }
+                    });
+                    canvas.renderAll();
+                }
+            }
+        }
+
+        // Update slider when text is selected
+        function onObjectSelected(e) {
+            const obj = e.selected ? e.selected[0] : e.target;
+            if (obj && (obj.type === 'i-text' || obj.type === 'text')) {
+                document.getElementById('text-size').value = obj.fontSize || 20;
+                document.getElementById('text-size-value').textContent = obj.fontSize || 20;
+                textSize = obj.fontSize || 20;
+            }
         }
 
         // Drawing functions
