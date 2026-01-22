@@ -668,7 +668,28 @@
                 canvas.setZoom(1);
                 canvas.absolutePan({ x: 0, y: 0 });
                 updateZoomDisplay();
+
+                // Search for source script based on filename
+                searchSourceScript(filename);
             });
+        }
+
+        function searchSourceScript(filename) {
+            fetch('/search-script', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: filename })
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.found) {
+                    console.log('✅ Script trouvé:', result.script);
+                    document.getElementById('image-info').textContent += ` → ${result.script.split('/').pop()}`;
+                } else {
+                    console.log('⚠️ Script non trouvé pour:', filename);
+                }
+            })
+            .catch(err => console.warn('Script search failed:', err));
         }
 
         function loadCurrentPlot() {
