@@ -2,7 +2,7 @@
 
 A lightweight, browser-based tool for annotating matplotlib plots with pan/zoom support. Draw shapes, add text annotations, and export coordinates for programmatic plot modifications.
 
-![Demo](demo.gif)
+![Screenshot](screenshot.png)
 
 ## Features
 
