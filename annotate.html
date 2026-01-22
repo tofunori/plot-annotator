@@ -191,6 +191,11 @@
             <span id="stroke-value">3</span>
         </div>
         <div class="toolbar-group">
+            <label>Texte</label>
+            <input type="range" id="text-size" min="12" max="48" value="20" onchange="updateTextSize()">
+            <span id="text-size-value">20</span>px
+        </div>
+        <div class="toolbar-group">
             <button onclick="newGroup()">➕ Nouveau groupe</button>
             <button onclick="deleteSelected()">🗑️ Supprimer</button>
             <button onclick="clearAll()">❌ Tout effacer</button>
@@ -307,6 +312,7 @@
         let currentTool = 'select';
         let currentColor = '#2196F3';
         let strokeWidth = 3;
+        let textSize = 20;
         let backgroundImage = null;
         let isDrawing = false;
         let startPoint = null;
@@ -495,6 +501,11 @@
             }
         }
 
+        function updateTextSize() {
+            textSize = parseInt(document.getElementById('text-size').value);
+            document.getElementById('text-size-value').textContent = textSize;
+        }
+
         // Drawing functions
         function startDrawing(opt) {
             if (currentTool === 'select' || currentTool === 'freedraw') return;
@@ -585,7 +596,7 @@
                     left: pendingTextPosition.x,
                     top: pendingTextPosition.y,
                     fill: currentColor,
-                    fontSize: 16 + strokeWidth * 2,
+                    fontSize: textSize,
                     fontFamily: 'Arial',
                     selectable: true,
                     groupId: currentGroupId
