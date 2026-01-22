@@ -77,6 +77,38 @@ class AnnotateHandler(SimpleHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        elif self.path == "/save-background":
+            content_length = int(self.headers["Content-Length"])
+            post_data = self.rfile.read(content_length)
+
+            try:
+                import base64
+
+                # Expect base64 PNG data
+                if post_data.startswith(b"data:image/png;base64,"):
+                    post_data = post_data[22:]
+
+                img_data = base64.b64decode(post_data)
+                img_path = PLOTS_DIR / "current.png"
+
+                with open(img_path, "wb") as f:
+                    f.write(img_data)
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps({"success": True, "path": str(img_path)}).encode()
+                )
+                print(f"✅ Background saved to {img_path}")
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
         else:
             self.send_response(404)
             self.end_headers()

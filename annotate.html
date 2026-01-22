@@ -818,7 +818,24 @@
                     return fetch('/save-image', {
                         method: 'POST',
                         body: imageData
-                    }).then(() => result);
+                    })
+                    .then(() => {
+                        // Also save background image (without annotations) to current.png
+                        const bg = canvas.backgroundImage;
+                        if (bg && bg._element) {
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = bg._element.naturalWidth || bg._element.width;
+                            tempCanvas.height = bg._element.naturalHeight || bg._element.height;
+                            const ctx = tempCanvas.getContext('2d');
+                            ctx.drawImage(bg._element, 0, 0);
+                            const bgData = tempCanvas.toDataURL('image/png');
+                            return fetch('/save-background', {
+                                method: 'POST',
+                                body: bgData
+                            });
+                        }
+                    })
+                    .then(() => result);
                 }
                 return result;
             })
