@@ -192,8 +192,22 @@
         </div>
         <div class="toolbar-group">
             <label>Texte</label>
-            <input type="range" id="text-size" min="12" max="48" value="20" onchange="updateTextSize()">
-            <span id="text-size-value">20</span>px
+            <select id="text-size" onchange="updateTextSize()" style="padding: 4px; background: #1a1a2e; color: #eee; border: 1px solid #4ecca3; border-radius: 4px;">
+                <option value="10">10</option>
+                <option value="12">12</option>
+                <option value="14">14</option>
+                <option value="16">16</option>
+                <option value="18">18</option>
+                <option value="20" selected>20</option>
+                <option value="24">24</option>
+                <option value="28">28</option>
+                <option value="32">32</option>
+                <option value="36">36</option>
+                <option value="42">42</option>
+                <option value="48">48</option>
+                <option value="56">56</option>
+                <option value="72">72</option>
+            </select>
         </div>
         <div class="toolbar-group">
             <button onclick="newGroup()">➕ Nouveau groupe</button>
@@ -507,7 +521,6 @@
 
         function updateTextSize() {
             textSize = parseInt(document.getElementById('text-size').value);
-            document.getElementById('text-size-value').textContent = textSize;
 
             // Update selected text objects
             const activeObject = canvas.getActiveObject();
@@ -527,13 +540,21 @@
             }
         }
 
-        // Update slider when text is selected
+        // Update dropdown when text is selected
         function onObjectSelected(e) {
             const obj = e.selected ? e.selected[0] : e.target;
             if (obj && (obj.type === 'i-text' || obj.type === 'text')) {
-                document.getElementById('text-size').value = obj.fontSize || 20;
-                document.getElementById('text-size-value').textContent = obj.fontSize || 20;
-                textSize = obj.fontSize || 20;
+                const size = Math.round(obj.fontSize) || 20;
+                const select = document.getElementById('text-size');
+                // Find closest option
+                let closest = 20;
+                for (const opt of select.options) {
+                    if (Math.abs(parseInt(opt.value) - size) < Math.abs(closest - size)) {
+                        closest = parseInt(opt.value);
+                    }
+                }
+                select.value = closest;
+                textSize = closest;
             }
         }
 
