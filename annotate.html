@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plot Annotator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .toolbar {
+            background: #16213e;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #0f3460;
+        }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toolbar-group label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        button {
+            background: #0f3460;
+            color: #eee;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        button:hover { background: #1a4a7a; }
+        button.active { background: #e94560; }
+        button.primary { background: #4ecca3; color: #1a1a2e; }
+        button.primary:hover { background: #3db892; }
+        .color-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .color-btn:hover { transform: scale(1.1); }
+        .color-btn.active { border-color: white; transform: scale(1.15); }
+        .canvas-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            background: #0d0d1a;
+        }
+        #canvas { cursor: crosshair; }
+        .status-bar {
+            background: #16213e;
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #0f3460;
+        }
+        .zoom-info { color: #4ecca3; }
+        input[type="range"] {
+            width: 80px;
+            accent-color: #4ecca3;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal h2 { margin-bottom: 20px; }
+        .modal textarea {
+            width: 100%;
+            height: 200px;
+            background: #0f3460;
+            color: #eee;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+        .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; }
+        .drop-zone {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #555;
+        }
+        .drop-zone h2 { font-size: 24px; margin-bottom: 10px; }
+        .drop-zone p { font-size: 14px; }
+        .hidden { display: none !important; }
+        .labels-panel {
+            position: fixed;
+            right: -280px;
+            top: 60px;
+            width: 260px;
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px 0 0 8px;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.3);
+            transition: right 0.3s ease;
+            z-index: 100;
+        }
+        .labels-panel.show { right: 0; }
+        .labels-panel h3 { margin-bottom: 15px; font-size: 14px; }
+        .label-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .color-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .label-row input {
+            flex: 1;
+            background: #0f3460;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            color: #eee;
+            font-size: 12px;
+        }
+        .label-row input::placeholder { color: #666; }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <label>Fichier</label>
+            <button onclick="loadImage()">📂 Ouvrir</button>
+            <button onclick="loadCurrentPlot()">🔄 current.png</button>
+            <button class="primary" onclick="saveAnnotations()">💾 Sauvegarder</button>
+        </div>
+        <div class="toolbar-group">
+            <label>Outil</label>
+            <button id="tool-pan" onclick="setTool('pan')">✋ Pan</button>
+            <button id="tool-select" class="active" onclick="setTool('select')">🔄 Sélection</button>
+            <button id="tool-rect" onclick="setTool('rect')">⬜ Rectangle</button>
+            <button id="tool-circle" onclick="setTool('circle')">⭕ Cercle</button>
+            <button id="tool-line" onclick="setTool('line')">📍 Ligne</button>
+            <button id="tool-freedraw" onclick="setTool('freedraw')">✏️ Libre</button>
+            <button id="tool-text" onclick="setTool('text')">📝 Texte</button>
+        </div>
+        <div class="toolbar-group">
+            <label>Couleur</label>
+            <div class="color-btn active" style="background: #2196F3" data-color="#2196F3" onclick="setColor(this)"></div>
+            <div class="color-btn" style="background: #F44336" data-color="#F44336" onclick="setColor(this)"></div>
+            <div class="color-btn" style="background: #4CAF50" data-color="#4CAF50" onclick="setColor(this)"></div>
+            <div class="color-btn" style="background: #FFEB3B" data-color="#FFEB3B" onclick="setColor(this)"></div>
+            <div class="color-btn" style="background: #FF9800" data-color="#FF9800" onclick="setColor(this)"></div>
+            <div class="color-btn" style="background: #9C27B0" data-color="#9C27B0" onclick="setColor(this)"></div>
+        </div>
+        <div class="toolbar-group">
+            <label>Trait</label>
+            <input type="range" id="stroke-width" min="1" max="10" value="3" onchange="updateStrokeWidth()">
+            <span id="stroke-value">3</span>
+        </div>
+        <div class="toolbar-group">
+            <button onclick="deleteSelected()">🗑️ Supprimer</button>
+            <button onclick="clearAll()">❌ Tout effacer</button>
+            <button onclick="toggleLabels()">🏷️ Labels</button>
+        </div>
+    </div>
+
+    <div class="canvas-container" id="canvas-container">
+        <canvas id="canvas"></canvas>
+        <div class="drop-zone" id="drop-zone">
+            <h2>🖼️ Glissez une image ici</h2>
+            <p>ou cliquez "Ouvrir" / "current.png"</p>
+            <p style="margin-top: 20px; color: #4ecca3;">Molette = Zoom | Espace+drag ou Clic-droit = Pan</p>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div>
+            <span id="image-info">Aucune image</span>
+        </div>
+        <div>
+            <span class="zoom-info">Zoom: <span id="zoom-level">100</span>%</span>
+            <span style="margin-left: 20px;">Molette = Zoom | Espace+drag / Clic-droit = Pan</span>
+        </div>
+    </div>
+
+    <!-- Labels Panel -->
+    <div class="labels-panel" id="labels-panel">
+        <h3>🏷️ Labels par couleur</h3>
+        <div class="label-row">
+            <div class="color-dot" style="background: #2196F3"></div>
+            <input type="text" id="label-blue" placeholder="Label pour bleu...">
+        </div>
+        <div class="label-row">
+            <div class="color-dot" style="background: #F44336"></div>
+            <input type="text" id="label-red" placeholder="Label pour rouge...">
+        </div>
+        <div class="label-row">
+            <div class="color-dot" style="background: #4CAF50"></div>
+            <input type="text" id="label-green" placeholder="Label pour vert...">
+        </div>
+        <div class="label-row">
+            <div class="color-dot" style="background: #FFEB3B"></div>
+            <input type="text" id="label-yellow" placeholder="Label pour jaune...">
+        </div>
+        <div class="label-row">
+            <div class="color-dot" style="background: #FF9800"></div>
+            <input type="text" id="label-orange" placeholder="Label pour orange...">
+        </div>
+        <div class="label-row">
+            <div class="color-dot" style="background: #9C27B0"></div>
+            <input type="text" id="label-purple" placeholder="Label pour violet...">
+        </div>
+    </div>
+
+    <!-- Save Modal -->
+    <div class="modal" id="save-modal">
+        <div class="modal-content">
+            <h2>💾 Annotations sauvegardées</h2>
+            <textarea id="json-output" readonly></textarea>
+            <p style="margin-bottom: 15px; font-size: 12px; color: #4ecca3;">
+                ✅ Sauvegardé automatiquement dans ~/.claude/plots/current_annotations.json
+            </p>
+            <div class="modal-buttons">
+                <button onclick="downloadJSON()">📥 Télécharger JSON</button>
+                <button onclick="downloadImage()">🖼️ Télécharger Image</button>
+                <button class="primary" onclick="closeModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*" style="display: none" onchange="handleFileSelect(event)">
+
+    <script>
+        // Configuration
+        const COLORS = {
+            '#2196F3': 'blue',
+            '#F44336': 'red',
+            '#4CAF50': 'green',
+            '#FFEB3B': 'yellow',
+            '#FF9800': 'orange',
+            '#9C27B0': 'purple',
+            '#00BCD4': 'cyan',
+            '#E91E63': 'pink'
+        };
+
+        // State
+        let canvas;
+        let currentTool = 'select';
+        let currentColor = '#2196F3';
+        let strokeWidth = 3;
+        let backgroundImage = null;
+        let isDrawing = false;
+        let startPoint = null;
+        let tempShape = null;
+        let isPanning = false;
+        let lastPanPoint = null;
+        let spacePressed = false;
+
+        // Initialize
+        function init() {
+            const container = document.getElementById('canvas-container');
+            canvas = new fabric.Canvas('canvas', {
+                width: container.clientWidth,
+                height: container.clientHeight,
+                selection: true,
+                preserveObjectStacking: true
+            });
+
+            // Zoom with mouse wheel
+            canvas.on('mouse:wheel', function(opt) {
+                const delta = opt.e.deltaY;
+                let zoom = canvas.getZoom();
+                zoom *= 0.999 ** delta;
+                zoom = Math.min(Math.max(0.1, zoom), 20);
+
+                canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+                opt.e.preventDefault();
+                opt.e.stopPropagation();
+                updateZoomDisplay();
+            });
+
+            // Pan with middle mouse, right-click, shift+drag, or space+drag
+            canvas.on('mouse:down', function(opt) {
+                const isMiddleClick = opt.e.button === 1;
+                const isRightClick = opt.e.button === 2;
+                const isShiftDrag = opt.e.shiftKey && currentTool === 'select';
+                const isSpaceDrag = spacePressed;
+                const isPanTool = currentTool === 'pan';
+
+                if (isMiddleClick || isRightClick || isShiftDrag || isSpaceDrag || isPanTool) {
+                    isPanning = true;
+                    lastPanPoint = { x: opt.e.clientX, y: opt.e.clientY };
+                    canvas.selection = false;
+                    canvas.setCursor('grabbing');
+                    opt.e.preventDefault();
+                } else if (currentTool === 'text') {
+                    addText(opt);
+                } else if (currentTool !== 'select' && currentTool !== 'freedraw') {
+                    startDrawing(opt);
+                }
+            });
+
+            canvas.on('mouse:move', function(opt) {
+                if (isPanning && lastPanPoint) {
+                    const dx = opt.e.clientX - lastPanPoint.x;
+                    const dy = opt.e.clientY - lastPanPoint.y;
+                    canvas.relativePan({ x: dx, y: dy });
+                    lastPanPoint = { x: opt.e.clientX, y: opt.e.clientY };
+                } else if (isDrawing && tempShape) {
+                    updateDrawing(opt);
+                }
+            });
+
+            canvas.on('mouse:up', function(opt) {
+                if (isPanning) {
+                    isPanning = false;
+                    lastPanPoint = null;
+                    canvas.selection = currentTool === 'select';
+                    canvas.setCursor('default');
+                } else if (isDrawing) {
+                    finishDrawing(opt);
+                }
+            });
+
+            // Prevent context menu on middle click
+            canvas.upperCanvasEl.addEventListener('contextmenu', e => e.preventDefault());
+            canvas.upperCanvasEl.addEventListener('mousedown', e => {
+                if (e.button === 1) e.preventDefault();
+            });
+
+            // Drag and drop
+            const dropZone = document.getElementById('canvas-container');
+            dropZone.addEventListener('dragover', e => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+            dropZone.addEventListener('drop', handleDrop);
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', e => {
+                if (e.key === ' ' || e.code === 'Space') {
+                    if (!spacePressed) {
+                        spacePressed = true;
+                        canvas.setCursor('grab');
+                        canvas.selection = false;
+                    }
+                    e.preventDefault();
+                } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                    deleteSelected();
+                } else if (e.key === 'Escape') {
+                    canvas.discardActiveObject();
+                    canvas.renderAll();
+                }
+            });
+
+            document.addEventListener('keyup', e => {
+                if (e.key === ' ' || e.code === 'Space') {
+                    spacePressed = false;
+                    canvas.setCursor('default');
+                    canvas.selection = (currentTool === 'select');
+                }
+            });
+
+            // Resize
+            window.addEventListener('resize', () => {
+                canvas.setDimensions({
+                    width: container.clientWidth,
+                    height: container.clientHeight
+                });
+            });
+
+            // Try to load current.png on startup
+            tryLoadCurrentPlot();
+        }
+
+        // Tool functions
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.toolbar button[id^="tool-"]').forEach(b => b.classList.remove('active'));
+            document.getElementById('tool-' + tool).classList.add('active');
+
+            canvas.isDrawingMode = (tool === 'freedraw');
+            canvas.selection = (tool === 'select');
+
+            if (tool === 'pan') {
+                canvas.setCursor('grab');
+                canvas.selection = false;
+            } else if (tool === 'freedraw') {
+                canvas.freeDrawingBrush.color = currentColor;
+                canvas.freeDrawingBrush.width = strokeWidth;
+                canvas.setCursor('crosshair');
+            } else {
+                canvas.setCursor('default');
+            }
+        }
+
+        function setColor(el) {
+            document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            currentColor = el.dataset.color;
+
+            if (canvas.isDrawingMode) {
+                canvas.freeDrawingBrush.color = currentColor;
+            }
+        }
+
+        function updateStrokeWidth() {
+            strokeWidth = parseInt(document.getElementById('stroke-width').value);
+            document.getElementById('stroke-value').textContent = strokeWidth;
+            if (canvas.isDrawingMode) {
+                canvas.freeDrawingBrush.width = strokeWidth;
+            }
+        }
+
+        // Drawing functions
+        function startDrawing(opt) {
+            if (currentTool === 'select' || currentTool === 'freedraw') return;
+
+            isDrawing = true;
+            const pointer = canvas.getPointer(opt.e);
+            startPoint = pointer;
+
+            const options = {
+                left: pointer.x,
+                top: pointer.y,
+                stroke: currentColor,
+                strokeWidth: strokeWidth,
+                fill: 'transparent',
+                selectable: true,
+                objectCaching: false
+            };
+
+            if (currentTool === 'rect') {
+                tempShape = new fabric.Rect({ ...options, width: 0, height: 0 });
+            } else if (currentTool === 'circle') {
+                tempShape = new fabric.Circle({ ...options, radius: 0 });
+            } else if (currentTool === 'line') {
+                tempShape = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
+                    stroke: currentColor,
+                    strokeWidth: strokeWidth,
+                    selectable: true
+                });
+            }
+
+            if (tempShape) {
+                canvas.add(tempShape);
+            }
+        }
+
+        function updateDrawing(opt) {
+            if (!tempShape) return;
+
+            const pointer = canvas.getPointer(opt.e);
+
+            if (currentTool === 'rect') {
+                const width = pointer.x - startPoint.x;
+                const height = pointer.y - startPoint.y;
+                tempShape.set({
+                    width: Math.abs(width),
+                    height: Math.abs(height),
+                    left: width > 0 ? startPoint.x : pointer.x,
+                    top: height > 0 ? startPoint.y : pointer.y
+                });
+            } else if (currentTool === 'circle') {
+                const radius = Math.sqrt(
+                    Math.pow(pointer.x - startPoint.x, 2) +
+                    Math.pow(pointer.y - startPoint.y, 2)
+                ) / 2;
+                tempShape.set({
+                    radius: radius,
+                    left: (startPoint.x + pointer.x) / 2 - radius,
+                    top: (startPoint.y + pointer.y) / 2 - radius
+                });
+            } else if (currentTool === 'line') {
+                tempShape.set({ x2: pointer.x, y2: pointer.y });
+            }
+
+            canvas.renderAll();
+        }
+
+        function finishDrawing(opt) {
+            isDrawing = false;
+            tempShape = null;
+            startPoint = null;
+        }
+
+        function addText(opt) {
+            const pointer = canvas.getPointer(opt.e);
+            const text = prompt('Entrez le texte:');
+            if (text) {
+                const textObj = new fabric.IText(text, {
+                    left: pointer.x,
+                    top: pointer.y,
+                    fill: currentColor,
+                    fontSize: 16 + strokeWidth * 2,
+                    fontFamily: 'Arial',
+                    selectable: true
+                });
+                canvas.add(textObj);
+                canvas.setActiveObject(textObj);
+                canvas.renderAll();
+            }
+        }
+
+        // Image loading
+        function loadImage() {
+            document.getElementById('file-input').click();
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) loadImageFile(file);
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            const file = event.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                loadImageFile(file);
+            }
+        }
+
+        function loadImageFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                setBackgroundImage(e.target.result, file.name);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function setBackgroundImage(dataUrl, filename = 'image') {
+            fabric.Image.fromURL(dataUrl, function(img) {
+                backgroundImage = img;
+
+                // Center and fit image
+                const scale = Math.min(
+                    canvas.width / img.width,
+                    canvas.height / img.height
+                ) * 0.9;
+
+                img.set({
+                    scaleX: scale,
+                    scaleY: scale,
+                    originX: 'center',
+                    originY: 'center',
+                    left: canvas.width / 2,
+                    top: canvas.height / 2,
+                    selectable: false,
+                    evented: false
+                });
+
+                canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+
+                document.getElementById('drop-zone').classList.add('hidden');
+                document.getElementById('image-info').textContent =
+                    `${filename} (${img.width}×${img.height}px)`;
+
+                // Reset zoom
+                canvas.setZoom(1);
+                canvas.absolutePan({ x: 0, y: 0 });
+                updateZoomDisplay();
+            });
+        }
+
+        function loadCurrentPlot() {
+            // Try to load from file system via fetch (works if served locally)
+            const plotPath = 'file://' + (window.PLOTS_DIR || '/home/' + (window.USER || 'tofunori') + '/.claude/plots') + '/current.png';
+
+            // Since file:// doesn't work with fetch, prompt user
+            alert('Pour charger current.png:\n\n1. Glissez le fichier depuis:\n   ~/.claude/plots/current.png\n\n2. Ou utilisez le bouton "Ouvrir"');
+        }
+
+        async function tryLoadCurrentPlot() {
+            // Try multiple paths
+            const paths = ['/current.png', './current.png', 'current.png'];
+            for (const path of paths) {
+                try {
+                    const response = await fetch(path);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const dataUrl = await blobToDataURL(blob);
+                        setBackgroundImage(dataUrl, 'current.png');
+                        return;
+                    }
+                } catch (e) {
+                    // Try next path
+                }
+            }
+        }
+
+        function blobToDataURL(blob) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // Annotation functions
+        function deleteSelected() {
+            const active = canvas.getActiveObjects();
+            if (active.length) {
+                active.forEach(obj => canvas.remove(obj));
+                canvas.discardActiveObject();
+                canvas.renderAll();
+            }
+        }
+
+        function clearAll() {
+            if (confirm('Effacer toutes les annotations?')) {
+                canvas.getObjects().forEach(obj => {
+                    if (obj !== backgroundImage) canvas.remove(obj);
+                });
+                canvas.renderAll();
+            }
+        }
+
+        function saveAnnotations() {
+            const objects = canvas.getObjects().filter(obj => obj !== canvas.backgroundImage);
+            const zones = [];
+
+            // Get background image bounds for coordinate conversion
+            const bg = canvas.backgroundImage;
+            let offsetX = 0, offsetY = 0, scale = 1;
+            if (bg) {
+                offsetX = bg.left - (bg.width * bg.scaleX) / 2;
+                offsetY = bg.top - (bg.height * bg.scaleY) / 2;
+                scale = bg.scaleX;
+            }
+
+            objects.forEach((obj, index) => {
+                const color = obj.stroke || obj.fill || '#000000';
+                const colorName = COLORS[color.toUpperCase()] || 'unknown';
+
+                const zone = {
+                    id: colorName,
+                    color: color,
+                    type: obj.type
+                };
+
+                // Convert to image coordinates
+                if (obj.type === 'rect') {
+                    zone.bbox = [
+                        Math.round((obj.left - offsetX) / scale),
+                        Math.round((obj.top - offsetY) / scale),
+                        Math.round((obj.left + obj.width * obj.scaleX - offsetX) / scale),
+                        Math.round((obj.top + obj.height * obj.scaleY - offsetY) / scale)
+                    ];
+                } else if (obj.type === 'circle') {
+                    const cx = obj.left + obj.radius * obj.scaleX;
+                    const cy = obj.top + obj.radius * obj.scaleY;
+                    zone.center = [
+                        Math.round((cx - offsetX) / scale),
+                        Math.round((cy - offsetY) / scale)
+                    ];
+                    zone.radius = Math.round(obj.radius * obj.scaleX / scale);
+                } else if (obj.type === 'line') {
+                    zone.from = [
+                        Math.round((obj.x1 + obj.left - offsetX) / scale),
+                        Math.round((obj.y1 + obj.top - offsetY) / scale)
+                    ];
+                    zone.to = [
+                        Math.round((obj.x2 + obj.left - offsetX) / scale),
+                        Math.round((obj.y2 + obj.top - offsetY) / scale)
+                    ];
+                } else if (obj.type === 'path') {
+                    const bounds = obj.getBoundingRect();
+                    zone.bbox = [
+                        Math.round((bounds.left - offsetX) / scale),
+                        Math.round((bounds.top - offsetY) / scale),
+                        Math.round((bounds.left + bounds.width - offsetX) / scale),
+                        Math.round((bounds.top + bounds.height - offsetY) / scale)
+                    ];
+                } else if (obj.type === 'i-text' || obj.type === 'text') {
+                    zone.type = 'text';
+                    zone.text = obj.text;
+                    zone.position = [
+                        Math.round((obj.left - offsetX) / scale),
+                        Math.round((obj.top - offsetY) / scale)
+                    ];
+                }
+
+                // Get label for this color
+                const labels = getLabels();
+                zone.label = labels[colorName] || null;
+                zones.push(zone);
+            });
+
+            const data = {
+                zones: zones,
+                created: new Date().toISOString(),
+                plot_name: 'current'
+            };
+
+            const json = JSON.stringify(data, null, 2);
+
+            // Save to server
+            fetch('/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: json
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    // Also save annotated image
+                    const imageData = canvas.toDataURL({ format: 'png', quality: 1 });
+                    return fetch('/save-image', {
+                        method: 'POST',
+                        body: imageData
+                    }).then(() => result);
+                }
+                return result;
+            })
+            .then(result => {
+                if (result.success) {
+                    document.getElementById('json-output').value = json;
+                    document.getElementById('save-modal').classList.add('show');
+                    console.log('Saved to:', result.path);
+                } else {
+                    alert('Erreur: ' + (result.error || 'Unknown'));
+                }
+            })
+            .catch(err => {
+                // Fallback: show modal anyway for manual download
+                document.getElementById('json-output').value = json;
+                document.getElementById('save-modal').classList.add('show');
+                console.warn('Server save failed, showing modal:', err);
+            });
+        }
+
+        function downloadJSON() {
+            const json = document.getElementById('json-output').value;
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'current_annotations.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadImage() {
+            const dataUrl = canvas.toDataURL({
+                format: 'png',
+                quality: 1,
+                multiplier: 1 / canvas.getZoom()
+            });
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = 'current_annotated.png';
+            a.click();
+        }
+
+        function closeModal() {
+            document.getElementById('save-modal').classList.remove('show');
+        }
+
+        function updateZoomDisplay() {
+            document.getElementById('zoom-level').textContent = Math.round(canvas.getZoom() * 100);
+        }
+
+        function toggleLabels() {
+            document.getElementById('labels-panel').classList.toggle('show');
+        }
+
+        function getLabels() {
+            return {
+                blue: document.getElementById('label-blue').value || null,
+                red: document.getElementById('label-red').value || null,
+                green: document.getElementById('label-green').value || null,
+                yellow: document.getElementById('label-yellow').value || null,
+                orange: document.getElementById('label-orange').value || null,
+                purple: document.getElementById('label-purple').value || null
+            };
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
