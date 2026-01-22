@@ -205,6 +205,151 @@ class AnnotateHandler(SimpleHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
+        elif self.path == "/refresh-from-source":
+            try:
+                import shutil
+
+                meta_path = PLOTS_DIR / "current_meta.json"
+
+                if not meta_path.exists():
+                    raise Exception("No metadata file")
+
+                with open(meta_path) as f:
+                    meta = json.load(f)
+
+                source = meta.get("source")
+                if not source or not Path(source).exists():
+                    raise Exception(f"Source not found: {source}")
+
+                # Copier source → current.png
+                shutil.copy2(source, PLOTS_DIR / "current.png")
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps({"success": True, "source": source}).encode()
+                )
+                print(f"✅ Refreshed from {source}")
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode())
+
+        elif self.path == "/refresh-by-filename":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length) if content_length > 0 else b"{}"
+
+            try:
+                import shutil
+                import subprocess
+
+                data = json.loads(post_data.decode("utf-8"))
+                filename = data.get("filename", "")
+
+                if not filename:
+                    raise Exception("No filename provided")
+
+                # Search for the file - prioritize Data drive, then home
+                search_roots = [
+                    Path("/media/tofunori/Data"),
+                    Path.home(),
+                ]
+
+                found_path = None
+
+                # Use find command with longer timeout
+                for search_root in search_roots:
+                    if not search_root.exists():
+                        continue
+                    try:
+                        result = subprocess.run(
+                            ["find", str(search_root), "-name", filename, "-type", "f", "-print", "-quit"],
+                            capture_output=True, text=True, timeout=30
+                        )
+                        if result.stdout.strip():
+                            found_path = result.stdout.strip().split("\n")[0]
+                            break
+                    except subprocess.TimeoutExpired:
+                        print(f"⚠️ Search timeout in {search_root}")
+                    except Exception as e:
+                        print(f"⚠️ Search error: {e}")
+
+                if not found_path or not Path(found_path).exists():
+                    raise Exception(f"File not found: {filename}")
+
+                # Copy to current.png
+                shutil.copy2(found_path, PLOTS_DIR / "current.png")
+
+                # Update metadata
+                meta_path = PLOTS_DIR / "current_meta.json"
+                meta = {"source": found_path, "name": filename}
+                with open(meta_path, "w") as f:
+                    json.dump(meta, f, indent=2)
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps({"success": True, "source": found_path}).encode()
+                )
+                print(f"✅ Found and refreshed from {found_path}")
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode())
+
+        elif self.path == "/set-source-path":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length) if content_length > 0 else b"{}"
+
+            try:
+                import shutil
+
+                data = json.loads(post_data.decode("utf-8"))
+                source = data.get("source", "")
+                name = data.get("name", "")
+
+                if not source:
+                    raise Exception("No source path provided")
+
+                # Verify the file exists
+                if not Path(source).exists():
+                    raise Exception(f"File not found: {source}")
+
+                # Copy to current.png
+                shutil.copy2(source, PLOTS_DIR / "current.png")
+
+                # Save metadata
+                meta_path = PLOTS_DIR / "current_meta.json"
+                meta = {"source": source, "name": name}
+                with open(meta_path, "w") as f:
+                    json.dump(meta, f, indent=2)
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps({"success": True, "source": source}).encode()
+                )
+                print(f"✅ Source path set: {source}")
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode())
+
         else:
             self.send_response(404)
             self.end_headers()

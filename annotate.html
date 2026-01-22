@@ -237,6 +237,7 @@
                 <span id="status-text">...</span>
             </span>
             <span id="image-info">Aucune image</span>
+            <span id="refresh-status" style="display: none; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #1a1a2e;"></span>
         </div>
         <div>
             <span class="zoom-info">Zoom: <span id="zoom-level">100</span>%</span>
@@ -303,6 +304,27 @@
                 <button onclick="downloadJSON()">📥 Télécharger JSON</button>
                 <button onclick="downloadImage()">🖼️ Télécharger Image</button>
                 <button class="primary" onclick="closeModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Path Input Modal (for Firefox) -->
+    <div class="modal" id="path-modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2>📁 Chemin du fichier</h2>
+            <p style="font-size: 13px; color: #888; margin-bottom: 15px;">
+                Pour activer le refresh 🔃, entre le chemin complet du fichier:
+            </p>
+            <input type="text" id="path-input" placeholder="/home/tofunori/..."
+                   style="width: 100%; padding: 12px; font-size: 14px; background: #0f3460;
+                          border: 2px solid #4ecca3; border-radius: 8px; color: #eee;
+                          margin-bottom: 15px; outline: none; font-family: monospace;">
+            <p style="font-size: 11px; color: #666; margin-bottom: 15px;">
+                💡 Astuce: Dans ton gestionnaire de fichiers, clic-droit → "Copier le chemin"
+            </p>
+            <div class="modal-buttons">
+                <button onclick="skipPath()">Ignorer</button>
+                <button class="primary" onclick="confirmPath()">✓ Enregistrer</button>
             </div>
         </div>
     </div>
@@ -431,6 +453,7 @@
             document.addEventListener('keydown', e => {
                 // Check if text modal is open
                 const textModalOpen = document.getElementById('text-modal').classList.contains('show');
+                const pathModalOpen = document.getElementById('path-modal').classList.contains('show');
 
                 if (textModalOpen) {
                     if (e.key === 'Enter') {
@@ -438,6 +461,17 @@
                         e.preventDefault();
                     } else if (e.key === 'Escape') {
                         cancelText();
+                        e.preventDefault();
+                    }
+                    return;
+                }
+
+                if (pathModalOpen) {
+                    if (e.key === 'Enter') {
+                        confirmPath();
+                        e.preventDefault();
+                    } else if (e.key === 'Escape') {
+                        skipPath();
                         e.preventDefault();
                     }
                     return;
@@ -682,6 +716,10 @@
         // Image loading
         // Store last directory handle for File System Access API
         let lastDirectoryHandle = null;
+        // Store file handle for refresh functionality
+        let currentFileHandle = null;
+        let currentImageSource = null; // 'filehandle', 'server', 'input', or 'drop'
+        let currentFilename = null; // Store filename for server-side search
 
         async function loadImage() {
             // Try modern File System Access API (remembers last folder)
@@ -700,9 +738,13 @@
                     }
                     const [fileHandle] = await window.showOpenFilePicker(options);
                     // Save directory for next time
-                    lastDirectoryHandle = await fileHandle.getFile().then(f => fileHandle);
+                    lastDirectoryHandle = fileHandle;
+                    // Save file handle for refresh
+                    currentFileHandle = fileHandle;
+                    currentImageSource = 'filehandle';
                     const file = await fileHandle.getFile();
                     loadImageFile(file);
+                    console.log('✅ File loaded with File System Access API - refresh enabled');
                 } catch (err) {
                     if (err.name !== 'AbortError') {
                         console.warn('File picker error:', err);
@@ -712,24 +754,100 @@
                 }
             } else {
                 // Fallback for browsers without File System Access API
+                console.warn('⚠️ File System Access API not supported (Firefox?) - refresh disabled');
                 document.getElementById('file-input').click();
             }
         }
 
         function handleFileSelect(event) {
             const file = event.target.files[0];
-            if (file) loadImageFile(file);
-        }
-
-        function handleDrop(event) {
-            event.preventDefault();
-            const file = event.dataTransfer.files[0];
-            if (file && file.type.startsWith('image/')) {
+            if (file) {
+                currentFileHandle = null;
+                currentImageSource = 'input';
                 loadImageFile(file);
             }
         }
 
+        function showPathModal(filename) {
+            document.getElementById('path-input').value = '';
+            document.getElementById('path-input').placeholder = `/chemin/vers/${filename}`;
+            document.getElementById('path-modal').classList.add('show');
+            setTimeout(() => document.getElementById('path-input').focus(), 100);
+        }
+
+        function skipPath() {
+            document.getElementById('path-modal').classList.remove('show');
+        }
+
+        async function confirmPath() {
+            const path = document.getElementById('path-input').value.trim();
+            document.getElementById('path-modal').classList.remove('show');
+
+            if (!path) return;
+
+            // Save path to server metadata
+            try {
+                const response = await fetch('/set-source-path', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: path, name: currentFilename })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    currentImageSource = 'server';
+                    console.log('✅ Chemin enregistré:', path);
+                    // Show confirmation in status bar
+                    const statusEl = document.getElementById('refresh-status');
+                    statusEl.style.display = 'inline';
+                    statusEl.style.color = '#4ecca3';
+                    statusEl.textContent = '✅ Chemin enregistré';
+                }
+            } catch (e) {
+                console.error('Failed to save path:', e);
+            }
+        }
+
+        async function handleDrop(event) {
+            event.preventDefault();
+            const items = event.dataTransfer.items;
+
+            if (items && items[0]) {
+                const item = items[0];
+
+                // Try to get file handle for refresh capability
+                if (item.getAsFileSystemHandle) {
+                    try {
+                        const handle = await item.getAsFileSystemHandle();
+                        console.log('File handle obtained:', handle);
+                        if (handle && handle.kind === 'file') {
+                            currentFileHandle = handle;
+                            currentImageSource = 'filehandle';
+                            const file = await handle.getFile();
+                            if (file.type.startsWith('image/')) {
+                                loadImageFile(file);
+                                console.log('✅ Loaded with file handle - refresh enabled');
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Could not get file handle:', e);
+                    }
+                } else {
+                    console.log('getAsFileSystemHandle not supported');
+                }
+
+                // Fallback to regular file (no refresh capability)
+                const file = item.getAsFile();
+                if (file && file.type.startsWith('image/')) {
+                    currentFileHandle = null;
+                    currentImageSource = 'drop';
+                    loadImageFile(file);
+                }
+            }
+        }
+
         function loadImageFile(file) {
+            currentFilename = file.name; // Store for refresh
             const reader = new FileReader();
             reader.onload = function(e) {
                 setBackgroundImage(e.target.result, file.name);
@@ -859,6 +977,8 @@ Le serveur doit tourner sur http://localhost:8888`;
                     if (response.ok) {
                         const blob = await response.blob();
                         const dataUrl = await blobToDataURL(blob);
+                        currentFileHandle = null;
+                        currentImageSource = 'server';
                         setBackgroundImage(dataUrl, 'current.png');
                         return;
                     }
@@ -869,20 +989,95 @@ Le serveur doit tourner sur http://localhost:8888`;
         }
 
         async function refreshCurrentPlot() {
-            // Reload current.png with cache busting
-            const cacheBuster = '?t=' + Date.now();
+            const statusEl = document.getElementById('refresh-status');
+
+            // Show loading state
+            statusEl.style.display = 'inline';
+            statusEl.style.color = '#FFA500';
+            statusEl.textContent = '🔄 Actualisation...';
+
             try {
-                const response = await fetch('/current.png' + cacheBuster);
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const dataUrl = await blobToDataURL(blob);
-                    setBackgroundImage(dataUrl, 'current.png');
-                    console.log('✅ Image actualisée');
+                let dataUrl;
+                let sourceName;
+
+                if (currentImageSource === 'filehandle' && currentFileHandle) {
+                    // Re-read from file handle (image loaded via file picker)
+                    const file = await currentFileHandle.getFile();
+                    dataUrl = await blobToDataURL(file);
+                    sourceName = file.name;
+                } else if (currentImageSource === 'server') {
+                    // Use server endpoint (image loaded via /plot load)
+                    const refreshResponse = await fetch('/refresh-from-source', { method: 'POST' });
+                    const result = await refreshResponse.json();
+
+                    if (!result.success) {
+                        statusEl.style.color = '#F44336';
+                        statusEl.textContent = '❌ ' + (result.error || 'Source introuvable');
+                        return;
+                    }
+
+                    const cacheBuster = '?t=' + Date.now();
+                    const imgResponse = await fetch('/current.png' + cacheBuster);
+                    if (!imgResponse.ok) {
+                        statusEl.style.color = '#F44336';
+                        statusEl.textContent = '❌ Rechargement échoué';
+                        return;
+                    }
+
+                    const blob = await imgResponse.blob();
+                    dataUrl = await blobToDataURL(blob);
+                    sourceName = result.source.split('/').pop();
+                } else if (currentFilename) {
+                    // Firefox fallback: search file by name on server
+                    const refreshResponse = await fetch('/refresh-by-filename', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filename: currentFilename })
+                    });
+                    const result = await refreshResponse.json();
+
+                    if (!result.success) {
+                        statusEl.style.color = '#F44336';
+                        statusEl.textContent = '❌ ' + (result.error || 'Fichier introuvable');
+                        return;
+                    }
+
+                    const cacheBuster = '?t=' + Date.now();
+                    const imgResponse = await fetch('/current.png' + cacheBuster);
+                    if (!imgResponse.ok) {
+                        statusEl.style.color = '#F44336';
+                        statusEl.textContent = '❌ Rechargement échoué';
+                        return;
+                    }
+
+                    const blob = await imgResponse.blob();
+                    dataUrl = await blobToDataURL(blob);
+                    sourceName = result.source.split('/').pop();
+
+                    // Switch to server mode for future refreshes (now we have the path)
+                    currentImageSource = 'server';
                 } else {
-                    alert('Impossible de recharger current.png');
+                    statusEl.style.color = '#F44336';
+                    statusEl.textContent = '❌ Aucune image chargée';
+                    return;
                 }
+
+                // Preserve current source type
+                const savedSource = currentImageSource;
+                const savedHandle = currentFileHandle;
+                setBackgroundImage(dataUrl, sourceName);
+                currentImageSource = savedSource;
+                currentFileHandle = savedHandle;
+
+                // Show success with timestamp
+                const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                statusEl.style.color = '#4CAF50';
+                statusEl.textContent = '✅ Actualisé ' + time;
+
+                console.log('✅ Plot actualisé depuis:', sourceName);
             } catch (e) {
-                alert('Erreur: ' + e.message);
+                statusEl.style.color = '#F44336';
+                statusEl.textContent = '❌ ' + e.message;
             }
         }
 
