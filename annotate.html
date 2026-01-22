@@ -161,14 +161,6 @@
 <body>
     <div class="toolbar">
         <div class="toolbar-group">
-            <label>Serveur</label>
-            <span id="server-status" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #333;">
-                <span id="status-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #666;"></span>
-                <span id="status-text">...</span>
-            </span>
-            <button onclick="checkServerStatus()" title="Vérifier la connexion">🔌 Test</button>
-        </div>
-        <div class="toolbar-group">
             <label>Fichier</label>
             <button onclick="loadImage()">📂 Ouvrir</button>
             <button onclick="loadCurrentPlot()">🔄 current.png</button>
@@ -219,7 +211,11 @@
     </div>
 
     <div class="status-bar">
-        <div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span id="server-status" onclick="checkServerStatus()" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #1a1a2e; cursor: pointer;" title="Cliquez pour tester la connexion">
+                <span id="status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #666;"></span>
+                <span id="status-text">...</span>
+            </span>
             <span id="image-info">Aucune image</span>
         </div>
         <div>
