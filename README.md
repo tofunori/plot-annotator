@@ -1,6 +1,8 @@
 # Plot Annotator
 
-A lightweight, browser-based tool for annotating matplotlib plots with pan/zoom support. Draw shapes, add text annotations, and export coordinates for programmatic plot modifications.
+A visual annotation tool for matplotlib plots, designed to work with **Claude Code** and **Codex CLI**. Draw shapes, add text instructions, and let AI modify your code automatically.
+
+> **Use case:** Annotate a plot visually → AI reads annotations → AI modifies your matplotlib code → Confirm before applying
 
 ![Screenshot](screenshot.png)
 
@@ -102,18 +104,23 @@ When you save, files are created in `~/.claude/plots/`:
 
 ## Use Cases
 
-### 1. AI-Assisted Plot Modification
-Use with LLMs (Claude, GPT) to describe plot modifications visually:
-1. Annotate the plot with desired changes
-2. Group each modification (shape + instruction text)
-3. AI reads annotations and modifies matplotlib code
-4. **Confirmation step** before applying changes
+### 1. AI-Assisted Plot Modification (Primary)
+The main use case with Claude Code or Codex CLI:
+1. Load your matplotlib figure
+2. Annotate visually: draw shape + write instruction
+3. AI analyzes annotations and proposes code changes
+4. You confirm → code is modified → plot regenerated
 
-### 2. Collaborative Plot Review
-Share plots with colleagues, let them annotate feedback, then programmatically apply changes.
+### 2. Iterative Plot Refinement
+Use the **refresh button 🔃** to iterate quickly:
+1. Annotate changes needed
+2. AI modifies code and regenerates
+3. Click 🔃 to see the new plot (annotations preserved)
+4. Add more annotations if needed
+5. Repeat until perfect
 
-### 3. Figure Preparation
-Annotate figures for publication review, track needed changes with color-coded zones.
+### 3. Collaborative Review
+Share annotated plots with colleagues or AI assistants for feedback.
 
 ## Installation Options
 
@@ -160,9 +167,22 @@ Open `annotate.html` directly in browser. Note: auto-save and refresh won't work
 - Modern browser (Chrome, Firefox, Safari, Edge)
 - No pip dependencies!
 
-## Integration with Claude Code
+## Integration with Claude Code & Codex CLI
 
-This tool is designed to work with [Claude Code](https://github.com/anthropics/claude-code) for AI-assisted plot modification. See `skills/SKILL.md` for the full workflow.
+This tool is designed to work with:
+- **[Claude Code](https://github.com/anthropics/claude-code)** - Anthropic's CLI for Claude
+- **[Codex CLI](https://github.com/openai/codex)** - OpenAI's coding assistant
+
+Copy the `skills/` folder to your skills directory:
+```bash
+# For Claude Code
+cp -r skills/plot ~/.claude/skills/
+
+# For Codex CLI
+cp -r skills/plot ~/.codex/skills/
+```
+
+### Workflow
 
 ```bash
 # Load a plot
@@ -175,10 +195,19 @@ This tool is designed to work with [Claude Code](https://github.com/anthropics/c
 
 # Apply changes
 /plot apply
-# → Claude shows proposed modifications
-# → You confirm before any code is changed
+# → AI shows proposed modifications with exact code changes
+# → You confirm (oui/non) before any code is modified
 # → Plot is regenerated automatically
 ```
+
+### Why visual annotation?
+
+Instead of describing changes in text ("make the x-axis labels smaller"), you:
+1. **Draw** a rectangle around the x-axis labels
+2. **Write** "smaller font" as text annotation
+3. AI **sees** exactly what you're pointing at
+4. AI **proposes** the exact code change
+5. You **confirm** before anything is modified
 
 ## Browser Compatibility
 
